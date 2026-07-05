@@ -2,7 +2,7 @@
 /**
  * Minecraft Channel Plugin for Claude Code
  *
- * 琛屿的MC身体：mineflayer连MC服务器，事件推给Claude，Claude决定怎么做
+ * Minecraft Channel Plugin: mineflayer connects to MC server, events pushed to Claude, Claude decides what to do
  *
  * stdio MCP server ←→ Claude Code
  * mineflayer ←→ MC服务器
@@ -21,6 +21,7 @@ const MC_HOST = process.env.MC_HOST || "localhost";
 const MC_PORT = parseInt(process.env.MC_PORT || "25565");
 const MC_USERNAME = process.env.MC_USERNAME || "ChenYu_Bot";
 const MC_VERSION = process.env.MC_VERSION || "1.20.1";
+const MC_OWNER_NAME = process.env.MC_OWNER_NAME || "Player";
 
 const fs = require("fs");
 const path = require("path");
@@ -481,7 +482,7 @@ function readString(buf, offset) {
 
 function parseFabricRegistry(buf) {
   log(`[registry] parsing fabric registry sync data: ${buf.length} bytes`);
-  // 06-12加entity_type/menu(认mod怪+开mod箱) 06-13加enchantment/mob_effect/fluid/villager×2/painting(煊煊说"又不进你上下文,塞呗")
+  // 06-12加entity_type/menu(认mod怪+开mod箱) 06-13加enchantment/mob_effect/fluid/villager×2/painting(user说"又不进你上下文,塞呗")
   const mapping = { blocks: {}, items: {}, entities: {}, menus: {}, enchantments: {}, effects: {}, fluids: {}, professions: {}, villagerTypes: {}, paintings: {} };
   let pos = 0;
   let registryCount = 0;
@@ -507,7 +508,7 @@ function parseFabricRegistry(buf) {
         pos += regPath.size;
         const fullRegName = actualRegNs + ":" + regPath.value;
         registryCount++;
-        log(`[registry] 表${registryCount}: ${fullRegName}`); // 06-13:煊煊问"还给了什么表"——全部打出来
+        log(`[registry] 表${registryCount}: ${fullRegName}`); // 06-13:user问"还给了什么表"——全部打出来
 
         const isBlock = fullRegName === "minecraft:block";
         const isItem = fullRegName === "minecraft:item";
@@ -706,7 +707,7 @@ function createBot(host, port) {
     locale: "zh_cn",
     // 06-12治"spawn后10秒timeout被踢"：登录区块洪峰(500mod调色板)把解析队列堵30秒+,
     // keepalive排队超时→服务器踢人。视距压小让洪峰可控(normal=289个区块列)。
-    // 06-13 tiny(25列)→short(81列)：tiny只装载32格,煊煊一跑远实体就卸载→follow全靠tp。
+    // 06-13 tiny(25列)→short(81列)：tiny只装载32格,user一跑远实体就卸载→follow全靠tp。
     // short=64格,洪峰仍比normal小3.5倍;如果10秒踢复发→退回tiny
     viewDistance: "short",
   });
@@ -977,7 +978,7 @@ function createBot(host, port) {
     spawnFired = true;
     log("Bot spawned!");
     connected = true;
-    notifyClaude("[MC] 琛屿已进入游戏世界！位置: " +
+    notifyClaude("[MC] Bot已进入游戏世界！位置: " +
       Math.round(bot.entity.position.x) + "," +
       Math.round(bot.entity.position.y) + "," +
       Math.round(bot.entity.position.z));
@@ -993,7 +994,7 @@ function createBot(host, port) {
     // 延迟初始化：spawn后先让事件循环喘口气回复keep-alive，10秒后再做重活
     setTimeout(() => {
     if (gen !== botGen) return; // 延迟期间被新bot替换了
-    // 自动设皮肤(煊煊要求) — 暂时关闭，新存档上传超时导致被踢
+    // 自动设皮肤(user要求) — 暂时关闭，新存档上传超时导致被踢
     // setTimeout(() => { try { safeChat('/skin set upload classic F:\\Minft111wodeshijie\\.minecraft\\skin.png'); } catch {} }, 3000);
     // registry映射兜底(06-12)：本次连接没收到/没解析成registry包→回放上次存盘的映射
     // （金锭显示成golden_pickaxe=物品表整张退回原版id，就是这种连接）
@@ -1024,7 +1025,7 @@ function createBot(host, port) {
         return _origAttack(entity, swing);
       };
     }
-    // 主动威胁雷达(06-13 煊煊点的："挨打了才知道怪,太被动")：每2.5秒扫16格内hostile/unknown_mob,
+    // 主动威胁雷达(06-13 user点的："挨打了才知道怪,太被动")：每2.5秒扫16格内hostile/unknown_mob,
     // 发现新威胁提前通知。防刷屏:同一只怪60秒一次+全局5秒间隔;战斗中不报;只报警不先动手(免得见birt也拔剑)
     if (!bot._threatRadar) {
       bot._threatRadar = setInterval(() => {
@@ -1173,7 +1174,7 @@ function createBot(host, port) {
     bot.on("path_update", (r) => {
       log(`[pathdbg] status=${r.status} pathLen=${r.path ? r.path.length : "?"} cost=${r.cost !== undefined ? Math.round(r.cost) : "?"} time=${r.time}ms visited=${r.visitedNodes} gen=${r.generatedNodes}`);
     });
-    safeChat("琛屿上线了！");
+    safeChat("Bot上线了！");
     log("Deferred init complete.");
     }, 10000);
 
@@ -1184,7 +1185,7 @@ function createBot(host, port) {
     setInterval(() => {
       if (!connected || !bot.entity) return;
       const now = Date.now();
-      // 危急：血量≤6 自动吃东西+通知（不自动跑，不丢下煊煊）
+      // 危急：血量≤6 自动吃东西+通知（不自动跑，不丢下user）
       if (bot.health <= 6 && now - lastAutoFlee > 5000) {
         lastAutoFlee = now;
         notifyClaude(`[MC] 🚨 血量危急！${Math.round(bot.health)}/20`, { event: "critical_health" });
@@ -1215,7 +1216,7 @@ function createBot(host, port) {
         lastHealthWarn = now;
         notifyClaude(`[MC] ⚠️ 血量低！${Math.round(bot.health)}/20`, { event: "low_health" });
       }
-      // 自动进食(06-13煊煊点的"饿了就会自己吃")：饿≤8且没在打架→自己吃。原来只有血≤6才auto吃,今晚饿到4格还傻跟着跑
+      // 自动进食(06-13user点的"饿了就会自己吃")：饿≤8且没在打架→自己吃。原来只有血≤6才auto吃,今晚饿到4格还傻跟着跑
       if (bot.food <= 8 && !bot._engaging && !bot._autoEating) {
         const food = bot.inventory.items().find((i) =>
           i.name.includes("bread") || i.name.includes("cooked") || i.name.includes("steak") ||
@@ -1469,7 +1470,7 @@ function createBot(host, port) {
 
   // 近战锁定循环(06-12)——照着僵尸自己的战斗逻辑写的：
   // 锁定目标→持续盯脸→距离>2.8就冲刺追击→贴脸按攻击冷却(650ms)连续出刀→
-  // 目标死/跑/超时收手；5秒掉血≥8或血≤8=打不过，撤到煊煊身边
+  // 目标死/跑/超时收手；5秒掉血≥8或血≤8=打不过，撤到user身边
   async function meleeEngage(targetId, reason) {
     if (bot._engaging) { log(`[engage] 已在战斗中,忽略新目标${targetId}`); return; }
     bot._engaging = true;
@@ -1496,7 +1497,7 @@ function createBot(host, port) {
       log(`[engage] 开打(${reason}): ${targetName} 武器=${weapon ? weapon.name : "空手"}`);
       while (connected && bot.health > 0) {
         const e = bot.entities[targetId];
-        if (!e || e.isValid === false) { log(`[engage] 目标消失(死了?跑了?谁杀的不知道) 共出刀${swings}次`); break; } // 06-13措辞改老实——上次写"打死"结果是煊煊杀的,我照着日志抢军功
+        if (!e || e.isValid === false) { log(`[engage] 目标消失(死了?跑了?谁杀的不知道) 共出刀${swings}次`); break; } // 06-13措辞改老实——上次写"打死"结果是user杀的,我照着日志抢军功
         const d = bot.entity.position.distanceTo(e.position);
         if (d > 20) { log(`[engage] 目标跑出20格,收手`); break; }
         if (Date.now() - start > 30000) { log(`[engage] 30秒超时收手`); break; }
@@ -1688,11 +1689,11 @@ function createBot(host, port) {
       interruptTask();
       try { bot.pathfinder.setGoal(null); } catch {}
       const hasThreat = !!(threat && threat.position && threat.isValid !== false);
-      const anchorName = "chenxuan2001";
+      const anchorName = MC_OWNER_NAME;
       const anchorEnt = bot.players[anchorName] && bot.players[anchorName].entity;
       let how = "";
       if (hasThreat && anchorEnt && anchorEnt.position && anchorEnt.position.distanceTo(threat.position) > 10) {
-        how = "tp向她(她离怪>10格,在安全位置)";
+        how = "tp向owner(owner离怪>10格,在安全位置)";
         safeChat(`/tp ${MC_USERNAME} ${anchorName}`);
       } else if (hasThreat) {
         const me = bot.entity.position;
@@ -1896,7 +1897,7 @@ function createBot(host, port) {
   // health事件备份（hurt有时不触发）— 作为主要伤害检测fallback
   let lastHealth = 20;
   let lastHealthCombatTrigger = 0;
-  let firstHealthAt = 0; // 幽灵伤害修复(06-12)：spawn时血量从上次残血同步(20→16)被当成"挨打了"→每次上线冤枉煊煊
+  let firstHealthAt = 0; // 幽灵伤害修复(06-12)：spawn时血量从上次残血同步(20→16)被当成"挨打了"→每次上线冤枉user
   bot.on("health", () => {
     if (!firstHealthAt) {
       firstHealthAt = Date.now();
@@ -1933,7 +1934,7 @@ function createBot(host, port) {
               nearestHostile = e; hostileDist = dist;
             }
           }
-          // 06-12改：怪优先归因。玩家在附近≠玩家打的——mod怪雷达可能扫不到，曾因此冤枉煊煊
+          // 06-12改：怪优先归因。玩家在附近≠玩家打的——mod怪雷达可能扫不到，曾因此冤枉user
           if (nearestHostile) {
             // 移到下面统一处理
           } else if (nearestPlayer && playerDist <= 4) {
@@ -2161,7 +2162,7 @@ function createBot(host, port) {
           }
           log(`found gravestone: ${found.name} at ${found.position}`);
           try {
-            // 06-12修：必须空手右键（煊煊教的），且认实物——背包没变就不报喜
+            // 06-12修：必须空手右键（user教的），且认实物——背包没变就不报喜
             try { await bot.unequip("hand"); } catch {}
             const before = bot.inventory.items().reduce((s, i) => s + i.count, 0);
             await bot.activateBlock(found);
@@ -2169,7 +2170,7 @@ function createBot(host, port) {
             const after = bot.inventory.items().reduce((s, i) => s + i.count, 0);
             const fp = found.position;
             if (after > before) {
-              notifyClaude(`[MC] 墓碑开了！装备回来了(背包${before}→${after}件) tp回煊煊身边`, { event: "gravestone_collected" });
+              notifyClaude(`[MC] 墓碑开了！装备回来了(背包${before}→${after}件) tp回user身边`, { event: "gravestone_collected" });
               const owner = bot.nearestEntity((e) => e.type === "player");
               if (owner && owner.username) {
                 setTimeout(() => safeChat("/tp " + MC_USERNAME + " " + owner.username), 1000);
@@ -2752,7 +2753,7 @@ async function main() {
     const { GoalFollow } = goals;
     followInterval = setInterval(() => {
       if (!bot || !connected) { log("[follow] skip: bot=" + !!bot + " connected=" + connected); return; }
-      // try { handleFollowDoors(); } catch (e) { log("[follow door] " + e.message); } // 关了——煊煊嫌门口站着一直开关
+      // try { handleFollowDoors(); } catch (e) { log("[follow door] " + e.message); } // 关了——user嫌门口站着一直开关
       if (bot.pvp && bot.pvp.target) { log("[follow] skip: pvp combat"); return; }
       if (bot._engaging) { return; } // meleeEngage战斗中,follow别抢控制权
       // 被扛检测(06-12重写)：信set_passengers包,不再搞10秒超时强制清除——
@@ -3183,7 +3184,7 @@ async function main() {
         let target;
         if (args.x !== undefined && args.y !== undefined && args.z !== undefined) {
           target = bot.blockAt(new Vec3(args.x, args.y, args.z));
-          // 墓碑自动清手(06-13)：forgottengraves只认空手右键。手里攥着树苗点了俩回合没反应,煊煊一句"你得空手"破案
+          // 墓碑自动清手(06-13)：forgottengraves只认空手右键。手里攥着树苗点了俩回合没反应,user一句"你得空手"破案
           try {
             const tn = (target && (stateIdCache[target.stateId] || target.name)) || "";
             if (tn.startsWith("forgottengraves:") && bot.heldItem) {
